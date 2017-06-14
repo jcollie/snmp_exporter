@@ -195,13 +195,13 @@ func generateConfigModule(cfg *ModuleConfig, node *Node, nameToNode map[string]*
 					}
 					indexNode := nameToNode[lookup.NewIndex]
 					// Avoid leaving the old labelname around.
-					index.Labelname = indexNode.Label
+					//index.Labelname = indexNode.Label
 					typ, ok := metricType(indexNode.Type)
 					if !ok {
 						log.Fatalf("Unknown index type %s for %s", indexNode.Type, lookup.NewIndex)
 					}
 					metric.Lookups = append(metric.Lookups, &config.Lookup{
-						Labels:    []string{indexNode.Label},
+						Labels:    []string{index.Labelname},
 						Labelname: indexNode.Label,
 						Type:      typ,
 						Oid:       indexNode.Oid,

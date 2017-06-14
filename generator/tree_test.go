@@ -527,13 +527,13 @@ func TestGenerateConfigModule(t *testing.T) {
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
-								Labelname: "octetDesc",
+								Labelname: "octetIndex",
 								Type:      "gauge",
 							},
 						},
 						Lookups: []*config.Lookup{
 							{
-								Labels:    []string{"octetDesc"},
+								Labels:    []string{"octetIndex"},
 								Labelname: "octetDesc",
 								Type:      "OctetString",
 								Oid:       "1.1.1.2",
@@ -573,13 +573,13 @@ func TestGenerateConfigModule(t *testing.T) {
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
-								Labelname: "octetDesc",
+								Labelname: "octetIndex",
 								Type:      "gauge",
 							},
 						},
 						Lookups: []*config.Lookup{
 							{
-								Labels:    []string{"octetDesc"},
+								Labels:    []string{"octetIndex"},
 								Labelname: "octetDesc",
 								Type:      "OctetString",
 								Oid:       "1.1.1.2",
