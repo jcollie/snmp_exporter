@@ -2,11 +2,11 @@ package main
 
 import (
 	"reflect"
+	"regexp"
 	"testing"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/prometheus/snmp_exporter/config"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestTreePrepare(t *testing.T) {
@@ -94,7 +94,7 @@ func TestTreePrepare(t *testing.T) {
 				t.Errorf("Got: %+v", n)
 			})
 			walkNode(c.out, func(n *Node) {
-				t.Errorf("Wanted: %+v", n)
+				t.Errorf("Wanted: %+v\n\n", n)
 			})
 
 		}
@@ -102,11 +102,48 @@ func TestTreePrepare(t *testing.T) {
 }
 
 func TestGenerateConfigModule(t *testing.T) {
+	var regexpFooBar config.Regexp
+	regexpFooBar.Regexp, _ = regexp.Compile(".*")
+
+	strMetrics := make(map[string][]config.RegexpExtract)
+	strMetrics["Status"] = []config.RegexpExtract{
+		{
+			Regex: regexpFooBar,
+			Value: "5",
+		},
+	}
+
+	overrides := make(map[string]MetricOverrides)
+	metricOverrides := MetricOverrides{
+		RegexpExtracts: strMetrics,
+	}
+	overrides["root"] = metricOverrides
+
 	cases := []struct {
 		node *Node
 		cfg  *ModuleConfig  // SNMP generator config.
 		out  *config.Module // SNMP exporter config.
 	}{
+		// Simple metric with overrides.
+		{
+			node: &Node{Oid: "1", Access: "ACCESS_READONLY", Type: "INTEGER", Label: "root"},
+			cfg: &ModuleConfig{
+				Walk:      []string{"root"},
+				Overrides: overrides,
+			},
+			out: &config.Module{
+				Walk: []string{"1"},
+				Metrics: []*config.Metric{
+					{
+						Name:           "root",
+						Oid:            "1",
+						Type:           "gauge",
+						Help:           " - 1",
+						RegexpExtracts: strMetrics,
+					},
+				},
+			},
+		},
 		// Simple metric.
 		{
 			node: &Node{Oid: "1", Access: "ACCESS_READONLY", Type: "INTEGER", Label: "root"},
@@ -120,6 +157,7 @@ func TestGenerateConfigModule(t *testing.T) {
 						Name: "root",
 						Oid:  "1",
 						Type: "gauge",
+						Help: " - 1",
 					},
 				},
 			},
@@ -137,6 +175,7 @@ func TestGenerateConfigModule(t *testing.T) {
 						Name: "root",
 						Oid:  "1",
 						Type: "gauge",
+						Help: " - 1",
 					},
 				},
 			},
@@ -154,6 +193,7 @@ func TestGenerateConfigModule(t *testing.T) {
 						Name: "root",
 						Oid:  "1",
 						Type: "gauge",
+						Help: " - 1",
 					},
 				},
 			},
@@ -198,66 +238,79 @@ func TestGenerateConfigModule(t *testing.T) {
 						Name: "OCTETSTR",
 						Oid:  "1.2",
 						Type: "OctetString",
+						Help: " - 1.2",
 					},
 					{
 						Name: "INTEGER",
 						Oid:  "1.3",
 						Type: "gauge",
+						Help: " - 1.3",
 					},
 					{
 						Name: "NETADDR",
 						Oid:  "1.4",
 						Type: "InetAddress",
+						Help: " - 1.4",
 					},
 					{
 						Name: "IPADDR",
 						Oid:  "1.5",
 						Type: "IpAddr",
+						Help: " - 1.5",
 					},
 					{
 						Name: "COUNTER",
 						Oid:  "1.6",
 						Type: "counter",
+						Help: " - 1.6",
 					},
 					{
 						Name: "GAUGE",
 						Oid:  "1.7",
 						Type: "gauge",
+						Help: " - 1.7",
 					},
 					{
 						Name: "TIMETICKS",
 						Oid:  "1.8",
 						Type: "gauge",
+						Help: " - 1.8",
 					},
 					{
 						Name: "COUNTER64",
 						Oid:  "1.11",
 						Type: "counter",
+						Help: " - 1.11",
 					},
 					{
 						Name: "BITSTRING",
 						Oid:  "1.12",
 						Type: "OctetString",
+						Help: " - 1.12",
 					},
 					{
 						Name: "UINTEGER",
 						Oid:  "1.14",
 						Type: "gauge",
+						Help: " - 1.14",
 					},
 					{
 						Name: "UNSIGNED32",
 						Oid:  "1.15",
 						Type: "gauge",
+						Help: " - 1.15",
 					},
 					{
 						Name: "INTEGER32",
 						Oid:  "1.16",
 						Type: "gauge",
+						Help: " - 1.16",
 					},
 					{
 						Name: "MacAddress",
 						Oid:  "1.100",
 						Type: "PhysAddress48",
+						Help: " - 1.100",
 					},
 				},
 			},
@@ -284,19 +337,28 @@ func TestGenerateConfigModule(t *testing.T) {
 				Walk: []string{"1"},
 				Metrics: []*config.Metric{
 					{
+						Name: "tableNoAccess",
+						Oid:  "1.1.1.1",
+						Type: "gauge",
+						Help: " - 1.1.1.1",
+					},
+					{
 						Name: "tableCreate",
 						Oid:  "1.1.1.2",
 						Type: "gauge",
+						Help: " - 1.1.1.2",
 					},
 					{
 						Name: "tableReadOnly",
 						Oid:  "1.1.1.4",
 						Type: "gauge",
+						Help: " - 1.1.1.4",
 					},
 					{
 						Name: "tableReadWrite",
 						Oid:  "1.1.1.5",
 						Type: "gauge",
+						Help: " - 1.1.1.5",
 					},
 				},
 			},
@@ -322,6 +384,7 @@ func TestGenerateConfigModule(t *testing.T) {
 						Name: "tableIndex",
 						Oid:  "1.1.1.1",
 						Type: "gauge",
+						Help: " - 1.1.1.1",
 						Indexes: []*config.Index{
 							{
 								Labelname: "tableIndex",
@@ -333,6 +396,7 @@ func TestGenerateConfigModule(t *testing.T) {
 						Name: "tableFoo",
 						Oid:  "1.1.1.2",
 						Type: "gauge",
+						Help: " - 1.1.1.2",
 						Indexes: []*config.Index{
 							{
 								Labelname: "tableIndex",
@@ -387,6 +451,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "octetIndex",
 						Oid:  "1.1.1.1",
+						Help: " - 1.1.1.1",
 						Type: "OctetString",
 						Indexes: []*config.Index{
 							{
@@ -398,6 +463,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "octetFoo",
 						Oid:  "1.1.1.2",
+						Help: " - 1.1.1.2",
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
@@ -409,6 +475,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "bitstringIndex",
 						Oid:  "1.2.1.1",
+						Help: " - 1.2.1.1",
 						Type: "OctetString",
 						Indexes: []*config.Index{
 							{
@@ -420,6 +487,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "bitstringFoo",
 						Oid:  "1.2.1.2",
+						Help: " - 1.2.1.2",
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
@@ -431,6 +499,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "ipaddrIndex",
 						Oid:  "1.3.1.1",
+						Help: " - 1.3.1.1",
 						Type: "IpAddr",
 						Indexes: []*config.Index{
 							{
@@ -442,6 +511,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "ipaddrFoo",
 						Oid:  "1.3.1.2",
+						Help: " - 1.3.1.2",
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
@@ -453,6 +523,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "netaddrIndex",
 						Oid:  "1.4.1.1",
+						Help: " - 1.4.1.1",
 						Type: "InetAddress",
 						Indexes: []*config.Index{
 							{
@@ -464,6 +535,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "netaddrFoo",
 						Oid:  "1.4.1.2",
+						Help: " - 1.4.1.2",
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
@@ -475,6 +547,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "physaddress48Index",
 						Oid:  "1.5.1.1",
+						Help: " - 1.5.1.1",
 						Type: "PhysAddress48",
 						Indexes: []*config.Index{
 							{
@@ -486,6 +559,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "physaddress48Foo",
 						Oid:  "1.5.1.2",
+						Help: " - 1.5.1.2",
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
@@ -524,6 +598,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "octetFoo",
 						Oid:  "1.1.1.3",
+						Help: " - 1.1.1.3",
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
@@ -570,6 +645,7 @@ func TestGenerateConfigModule(t *testing.T) {
 					{
 						Name: "octetFoo",
 						Oid:  "1.1.1.3",
+						Help: " - 1.1.1.3",
 						Type: "gauge",
 						Indexes: []*config.Index{
 							{
@@ -581,6 +657,76 @@ func TestGenerateConfigModule(t *testing.T) {
 							{
 								Labels:    []string{"octetIndex"},
 								Labelname: "octetDesc",
+								Type:      "OctetString",
+								Oid:       "1.1.1.2",
+							},
+						},
+					},
+				},
+			},
+		},
+		// Validate metric names.
+		{
+			node: &Node{Oid: "1", Label: "root",
+				Children: []*Node{
+					{Oid: "1.1", Access: "ACCESS_READONLY", Label: "digital-sen1-1", Hint: "1x:"},
+				}},
+			cfg: &ModuleConfig{
+				Walk: []string{"root"},
+			},
+			out: &config.Module{
+				Walk: []string{"1"},
+				Metrics: []*config.Metric{
+					{
+						Name:    "digital_sen1_1",
+						Oid:     "1.1",
+						Type:    "PhysAddress48",
+						Help:    " - 1.1",
+						Indexes: []*config.Index{},
+						Lookups: []*config.Lookup{},
+					},
+				},
+			},
+		},
+		// Validate label names.
+		{
+			node: &Node{Oid: "1", Label: "root",
+				Children: []*Node{
+					{Oid: "1.1", Label: "octet",
+						Children: []*Node{
+							{Oid: "1.1.1", Label: "octet-Entry", Indexes: []string{"octet&Index"},
+								Children: []*Node{
+									{Oid: "1.1.1.1", Access: "ACCESS_READONLY", Label: "octet&Index", Type: "INTEGER"},
+									{Oid: "1.1.1.2", Access: "ACCESS_READONLY", Label: "octet*Desc", Type: "OCTETSTR"},
+									{Oid: "1.1.1.3", Access: "ACCESS_READONLY", Label: "octet^Foo", Type: "INTEGER"}}}}}}},
+			cfg: &ModuleConfig{
+				Walk: []string{"octet^Foo"},
+				Lookups: []*Lookup{
+					{
+						OldIndex: "octet&Index",
+						NewIndex: "1.1.1.2",
+					},
+				},
+			},
+			out: &config.Module{
+				// Walk is expanded to include the lookup OID.
+				Walk: []string{"1.1.1.2", "1.1.1.3"},
+				Metrics: []*config.Metric{
+					{
+						Name: "octet_Foo",
+						Oid:  "1.1.1.3",
+						Type: "gauge",
+						Help: " - 1.1.1.3",
+						Indexes: []*config.Index{
+							{
+								Labelname: "octet_Desc",
+								Type:      "gauge",
+							},
+						},
+						Lookups: []*config.Lookup{
+							{
+								Labels:    []string{"octet_Desc"},
+								Labelname: "octet_Desc",
 								Type:      "OctetString",
 								Oid:       "1.1.1.2",
 							},
@@ -603,7 +749,6 @@ func TestGenerateConfigModule(t *testing.T) {
 
 		nameToNode := prepareTree(c.node)
 		got := generateConfigModule(c.cfg, c.node, nameToNode)
-
 		if !reflect.DeepEqual(got, c.out) {
 			t.Errorf("GenerateConfigModule: difference in case %d", i)
 			out, _ := yaml.Marshal(got)

@@ -1,10 +1,6 @@
 package main
 
-import (
-	"time"
-
-	"github.com/prometheus/snmp_exporter/config"
-)
+import "github.com/prometheus/snmp_exporter/config"
 
 // The generator config.
 type Config struct {
@@ -24,16 +20,28 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-type ModuleConfig struct {
-	Walk    []string  `yaml:"walk"`
-	Lookups []*Lookup `yaml:"lookups"`
+type MetricOverrides struct {
+	RegexpExtracts map[string][]config.RegexpExtract `yaml:"regex_extracts,omitempty"`
 
-	// This need to be kepy in sync with the generated config.
-	Version        int           `yaml:"version,omitempty"`
-	MaxRepetitions uint8         `yaml:"max_repetitions,omitempty"`
-	Retries        int           `yaml:"retries,omitempty"`
-	Timeout        time.Duration `yaml:"timeout,omitempty"`
-	Auth           *config.Auth  `yaml:"auth,omitempty"`
+	XXX map[string]interface{} `yaml:",inline"`
+}
+
+func (c *MetricOverrides) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain MetricOverrides
+	if err := unmarshal((*plain)(c)); err != nil {
+		return err
+	}
+	if err := config.CheckOverflow(c.XXX, "overrides"); err != nil {
+		return err
+	}
+	return nil
+}
+
+type ModuleConfig struct {
+	Walk       []string                   `yaml:"walk"`
+	Lookups    []*Lookup                  `yaml:"lookups"`
+	WalkParams config.WalkParams          `yaml:",inline"`
+	Overrides  map[string]MetricOverrides `yaml:"overrides"`
 
 	XXX map[string]interface{} `yaml:",inline"`
 }

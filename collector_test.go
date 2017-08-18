@@ -2,12 +2,265 @@ package main
 
 import (
 	"reflect"
+	"regexp"
 	"testing"
 
+	"github.com/prometheus/client_model/go"
 	"github.com/soniah/gosnmp"
 
 	"github.com/prometheus/snmp_exporter/config"
 )
+
+func TestPduToSample(t *testing.T) {
+
+	cases := []struct {
+		pdu             *gosnmp.SnmpPDU
+		indexOids       []int
+		metric          *config.Metric
+		oidToPdu        map[string]gosnmp.SnmpPDU
+		expectedMetrics map[string]string
+	}{
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Value: "SomeStringValue",
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "TestMetricName",
+				Oid:  "1.1.1.1.1",
+				Help: "HelpText",
+				RegexpExtracts: map[string][]config.RegexpExtract{
+					"Extension": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile(".*"),
+							},
+							Value: "5",
+						},
+					},
+				},
+			},
+			oidToPdu: make(map[string]gosnmp.SnmpPDU),
+			expectedMetrics: map[string]string{
+				`gauge:<value:5 > `: `Desc{fqName: "TestMetricNameExtension", help: "HelpText (regex extracted)", constLabels: {}, variableLabels: []}`,
+			},
+		},
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Value: "SomeStringValue",
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "TestMetricName",
+				Oid:  "1.1.1.1.1",
+				Help: "HelpText",
+				RegexpExtracts: map[string][]config.RegexpExtract{
+					"Extension": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile(".*"),
+							},
+							Value: "",
+						},
+					},
+				},
+			},
+			expectedMetrics: map[string]string{},
+		},
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Value: "SomeStringValue",
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "TestMetricName",
+				Oid:  "1.1.1.1.1",
+				Help: "HelpText",
+				RegexpExtracts: map[string][]config.RegexpExtract{
+					"Extension": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile("(will_not_match)"),
+							},
+							Value: "",
+						},
+					},
+				},
+			},
+			expectedMetrics: map[string]string{},
+		},
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Value: 2,
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "TestMetricName",
+				Oid:  "1.1.1.1.1",
+				Help: "HelpText",
+				RegexpExtracts: map[string][]config.RegexpExtract{
+					"Status": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile(".*"),
+							},
+							Value: "5",
+						},
+					},
+				},
+			},
+			expectedMetrics: map[string]string{
+				`gauge:<value:5 > `: `Desc{fqName: "TestMetricNameStatus", help: "HelpText (regex extracted)", constLabels: {}, variableLabels: []}`,
+			},
+		},
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Value: "Test value 4.42 123 999",
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "TestMetricName",
+				Oid:  "1.1.1.1.1",
+				Help: "HelpText",
+				RegexpExtracts: map[string][]config.RegexpExtract{
+					"Blank": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile("XXXX"),
+							},
+							Value: "4",
+						},
+					},
+					"Extension": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile(".*"),
+							},
+							Value: "5",
+						},
+					},
+					"MultipleRegexes": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile("XXXX"),
+							},
+							Value: "123",
+						},
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile("123"),
+							},
+							Value: "999",
+						},
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile(".*"),
+							},
+							Value: "777",
+						},
+					},
+					"Template": []config.RegexpExtract{
+						{
+							Regex: config.Regexp{
+								regexp.MustCompile("([0-9].[0-9]+)"),
+							},
+							Value: "$1",
+						},
+					},
+				},
+			},
+			oidToPdu: make(map[string]gosnmp.SnmpPDU),
+			expectedMetrics: map[string]string{
+				`gauge:<value:5 > `:    `Desc{fqName: "TestMetricNameExtension", help: "HelpText (regex extracted)", constLabels: {}, variableLabels: []}`,
+				`gauge:<value:999 > `:  `Desc{fqName: "TestMetricNameMultipleRegexes", help: "HelpText (regex extracted)", constLabels: {}, variableLabels: []}`,
+				`gauge:<value:4.42 > `: `Desc{fqName: "TestMetricNameTemplate", help: "HelpText (regex extracted)", constLabels: {}, variableLabels: []}`,
+			},
+		},
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Type:  gosnmp.Integer,
+				Value: 2,
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "test_metric",
+				Oid:  "1.1.1.1.1",
+				Type: "counter",
+				Help: "Help string",
+			},
+			oidToPdu:        make(map[string]gosnmp.SnmpPDU),
+			expectedMetrics: map[string]string{"counter:<value:2 > ": `Desc{fqName: "test_metric", help: "Help string", constLabels: {}, variableLabels: []}`},
+		},
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Type:  gosnmp.Integer,
+				Value: 2,
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "test_metric",
+				Oid:  "1.1.1.1.1",
+				Type: "gauge",
+				Help: "Help string",
+			},
+			oidToPdu:        make(map[string]gosnmp.SnmpPDU),
+			expectedMetrics: map[string]string{"gauge:<value:2 > ": `Desc{fqName: "test_metric", help: "Help string", constLabels: {}, variableLabels: []}`},
+		},
+		{
+			pdu: &gosnmp.SnmpPDU{
+				Name:  "1.1.1.1.1",
+				Type:  gosnmp.Integer,
+				Value: -2,
+			},
+			indexOids: []int{},
+			metric: &config.Metric{
+				Name: "test_metric",
+				Oid:  "1.1.1.1.1",
+				Help: "Help string",
+			},
+			oidToPdu:        make(map[string]gosnmp.SnmpPDU),
+			expectedMetrics: map[string]string{`label:<name:"test_metric" value:"-2" > gauge:<value:1 > `: `Desc{fqName: "test_metric", help: "Help string", constLabels: {}, variableLabels: [test_metric]}`},
+		},
+	}
+
+	for i, c := range cases {
+		metrics := pduToSamples(c.indexOids, c.pdu, c.metric, c.oidToPdu)
+		if len(metrics) != len(c.expectedMetrics) {
+			t.Fatalf("Unexpected number of metrics returned for case %v: want %v, got %v", i, len(c.expectedMetrics), len(metrics))
+		}
+		metric := &io_prometheus_client.Metric{}
+		for _, m := range metrics {
+			err := m.Write(metric)
+			if err != nil {
+				t.Fatalf("Error writing metric: %v", err)
+			}
+			if _, ok := c.expectedMetrics[metric.String()]; !ok {
+				t.Fatalf("Unexpected metric: got %v", metric.String())
+			}
+			if c.expectedMetrics[metric.String()] != m.Desc().String() {
+				t.Fatalf("Unexpected metric: got %v , want %v", m.Desc().String(), c.expectedMetrics[metric.String()])
+			}
+		}
+	}
+}
+
+func TestGetPduValue(t *testing.T) {
+	pdu := &gosnmp.SnmpPDU{
+		Value: uint64(1 << 63),
+		Type:  gosnmp.Counter64,
+	}
+	value := getPduValue(pdu)
+	if value <= 0 {
+		t.Fatalf("Got negative value for PDU value type Counter64: %v", value)
+	}
+}
 
 func TestOidToList(t *testing.T) {
 	cases := []struct {
@@ -80,8 +333,8 @@ func TestPduValueAsString(t *testing.T) {
 			result: "1",
 		},
 		{
-			pdu:    &gosnmp.SnmpPDU{Value: int64(-1000000000000)},
-			result: "-1000000000000",
+			pdu:    &gosnmp.SnmpPDU{Value: uint64(1)},
+			result: "1",
 		},
 		{
 			pdu:    &gosnmp.SnmpPDU{Value: ".1.2.3.4", Type: gosnmp.ObjectIdentifier},

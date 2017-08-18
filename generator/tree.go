@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
@@ -109,7 +110,7 @@ func metricType(t string) (string, bool) {
 
 func metricAccess(a string) bool {
 	switch a {
-	case "ACCESS_READONLY", "ACCESS_READWRITE", "ACCESS_CREATE":
+	case "ACCESS_READONLY", "ACCESS_READWRITE", "ACCESS_CREATE", "ACCESS_NOACCESS":
 		return true
 	default:
 		// the others are inaccessible metrics.
@@ -161,9 +162,10 @@ func generateConfigModule(cfg *ModuleConfig, node *Node, nameToNode map[string]*
 			}
 
 			metric := &config.Metric{
-				Name:    n.Label,
+				Name:    sanitizeLabelName(n.Label),
 				Oid:     n.Oid,
 				Type:    t,
+				Help:    n.Description + " - " + n.Oid,
 				Indexes: []*config.Index{},
 				Lookups: []*config.Lookup{},
 			}
@@ -195,20 +197,29 @@ func generateConfigModule(cfg *ModuleConfig, node *Node, nameToNode map[string]*
 					}
 					indexNode := nameToNode[lookup.NewIndex]
 					// Avoid leaving the old labelname around.
-					//index.Labelname = indexNode.Label
+					//index.Labelname = sanitizeLabelName(indexNode.Label)
 					typ, ok := metricType(indexNode.Type)
 					if !ok {
 						log.Fatalf("Unknown index type %s for %s", indexNode.Type, lookup.NewIndex)
 					}
 					metric.Lookups = append(metric.Lookups, &config.Lookup{
-						Labels:    []string{index.Labelname},
-						Labelname: indexNode.Label,
+						Labels:    []string{sanitizeLabelName(index.Labelname)},
+						Labelname: sanitizeLabelName(indexNode.Label),
 						Type:      typ,
 						Oid:       indexNode.Oid,
 					})
 					// Make sure we walk the lookup OID
 					needToWalk[indexNode.Oid] = struct{}{}
 				}
+			}
+		}
+	}
+
+	// Apply module config overrides to their corresponding metrics.
+	for name, params := range cfg.Overrides {
+		for _, metric := range out.Metrics {
+			if name == metric.Name || name == metric.Oid {
+				metric.RegexpExtracts = params.RegexpExtracts
 			}
 		}
 	}
@@ -220,4 +231,12 @@ func generateConfigModule(cfg *ModuleConfig, node *Node, nameToNode map[string]*
 	// Remove redundant OIDs to be walked.
 	out.Walk = minimizeOids(oids)
 	return out
+}
+
+var (
+	invalidLabelCharRE = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+)
+
+func sanitizeLabelName(name string) string {
+	return invalidLabelCharRE.ReplaceAllString(name, "_")
 }
